@@ -27,6 +27,7 @@ button,
 input {
   font: inherit;
 }
+
 .app-shell {
   width: min(1120px, calc(100% - 2rem));
   margin: 0 auto;
@@ -85,10 +86,15 @@ button,
   background: #03339a;
   cursor: pointer;
   font-weight: bold;
-  flex-grow: 1;
-  flex-basis: 200px;
+  
   text-align: center;
 }
+
+button:not([data-icon]) {
+  flex-grow: 1;
+  flex-basis: 200px;
+}
+
 
 .file-picker {
   background: #25a6eb;
@@ -254,4 +260,8 @@ button.secondary:focus-visible {
     box-shadow: none;
     border: 1px solid #cbd5e1;
   }
+}
+
+.link {
+  margin: 32px 0;
 }

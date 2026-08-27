@@ -167,7 +167,6 @@
     }
 
   function scaleDivToFit() {
-    console.warn(element);
     if (!element?.offsetWidth) {
       return;
     }
@@ -178,7 +177,6 @@
     const scaleX = vw / rect.width;
     const scaleY = vh / rect.height;
     const scale = Math.min(1, scaleX, scaleY);
-    console.warn(scale);
 
     // Apply transform and update wrapper size so browser layout uses the scaled size
     element.style.transformOrigin = 'top left';
@@ -196,6 +194,9 @@
         <li>Dê duplo clique em um cruzamento para alternar entre horizontal e vertical.</li>
       </ul>
     </div>
+    <p>
+      <a href="/generate-file" class="no-print link">Gerar arquivo - palavras cruzadas</a>
+    </p>
     <div class="actions no-print">
       <label class="file-picker">
         Importar arquivo
