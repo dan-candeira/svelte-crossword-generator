@@ -87,11 +87,43 @@ function canPlace(
   return true;
 }
 
-function placementScore(candidate: UnnumberedWord, placed: UnnumberedWord[]): number {
-  const size = getBounds([...placed, candidate]);
+function countCrossingCells(candidate: UnnumberedWord, placed: UnnumberedWord[]): number {
+  const occupied = occupiedMap(placed);
+  return wordCells(candidate).filter(
+    (cell) => occupied.get(cellKey(cell.row, cell.col)) === cell.letter,
+  ).length;
+}
+
+function countValidCrossings(words: UnnumberedWord[]): number {
+  return words.reduce(
+    (total, word, index) =>
+      total +
+      words.slice(index + 1).filter((other) => hasValidCrossing(word, other)).length,
+    0,
+  );
+}
+
+function countIsolatedWords(words: UnnumberedWord[]): number {
+  return words.filter(
+    (word, index) => !words.some((other, otherIndex) => index !== otherIndex && hasValidCrossing(word, other)),
+  ).length;
+}
+
+// Menor pontuação representa uma grade menor, mais proporcional e com mais cruzamentos.
+function layoutScore(words: UnnumberedWord[]): number {
+  const size = getBounds(words);
   const height = size.maxRow - size.minRow + 1;
   const width = size.maxCol - size.minCol + 1;
-  return Math.abs(width / height - 1) * 20 + width * height * 0.02;
+  const area = width * height;
+  const proportionPenalty = Math.abs(width - height) * 4;
+  const isolatedPenalty = countIsolatedWords(words) * 25;
+  const crossingBonus = countValidCrossings(words) * 20;
+
+  return area * 100 + proportionPenalty + isolatedPenalty - crossingBonus;
+}
+
+function candidateScore(candidate: UnnumberedWord, placed: UnnumberedWord[]): number {
+  return layoutScore([...placed, candidate]) - countCrossingCells(candidate, placed) * 40;
 }
 
 function crossingCandidates(word: InputWord, placed: UnnumberedWord[]): UnnumberedWord[] {
@@ -112,25 +144,49 @@ function crossingCandidates(word: InputWord, placed: UnnumberedWord[]): Unnumber
       }
     }
   }
-  return candidates.filter((candidate) => canPlace(candidate, placed, true));
+  const uniqueCandidates = new Map<string, UnnumberedWord>();
+  candidates.forEach((candidate) => {
+    const key = `${candidate.row},${candidate.col},${candidate.direction}`;
+    uniqueCandidates.set(key, candidate);
+  });
+  return [...uniqueCandidates.values()].filter((candidate) => canPlace(candidate, placed, true));
 }
 
-function isolatedCandidate(
-  word: InputWord,
+// Varre as posições próximas à grade antes de expandir o grid, mantendo palavras isoladas compactas.
+function compactIsolatedCandidates(word: InputWord, placed: UnnumberedWord[]): UnnumberedWord[] {
+  const size = getBounds(placed);
+  const length = answerCharacters(word.answer).length;
+  const candidates: UnnumberedWord[] = [];
+
+  for (const direction of ['H', 'V'] as const) {
+    for (let row = size.minRow - length - 1; row <= size.maxRow + 1; row += 1) {
+      for (let col = size.minCol - length - 1; col <= size.maxCol + 1; col += 1) {
+        const candidate = { ...word, row, col, direction };
+        if (canPlace(candidate, placed, false, false)) candidates.push(candidate);
+      }
+    }
+  }
+
+  return candidates;
+}
+
+function selectBestCandidate(
+  candidates: UnnumberedWord[],
   placed: UnnumberedWord[],
   random: () => number,
 ): UnnumberedWord {
-  const size = getBounds(placed);
-  const options: UnnumberedWord[] = [];
-  for (let attempt = 0; attempt < 350; attempt += 1) {
-    const direction: Direction = random() < 0.5 ? 'H' : 'V';
-    const row = Math.floor(random() * (size.maxRow - size.minRow + 13)) + size.minRow - 6;
-    const col = Math.floor(random() * (size.maxCol - size.minCol + 13)) + size.minCol - 6;
-    const candidate = { ...word, row, col, direction };
-    if (canPlace(candidate, placed, false, false)) options.push(candidate);
+  if (!candidates.length) {
+    throw new Error('Não foi possível encontrar uma posição válida para a palavra.');
   }
-  options.sort((first, second) => placementScore(first, placed) - placementScore(second, placed));
-  return options[0] ?? { ...word, row: size.maxRow + 3, col: size.minCol, direction: 'H' };
+
+  const scoredCandidates = candidates
+    .map((candidate) => ({ candidate, score: candidateScore(candidate, placed) }))
+    .sort((first, second) => first.score - second.score);
+  const bestScore = scoredCandidates[0].score;
+  const similarCandidates = scoredCandidates.filter(
+    ({ score }) => score <= bestScore + 20,
+  );
+  return similarCandidates[Math.floor(random() * similarCandidates.length)].candidate;
 }
 
 export function hasValidCrossing(first: UnnumberedWord, second: UnnumberedWord): boolean {
@@ -160,6 +216,33 @@ function isSafeLayout(candidate: UnnumberedWord, placed: UnnumberedWord[]): bool
   return placed.every((other) => !wordsTouchOrCollide(candidate, other));
 }
 
+function wordConnectionScore(word: InputWord, words: InputWord[]): number {
+  const letters = new Set(answerCharacters(word.answer));
+  return words
+    .filter((other) => other !== word)
+    .reduce(
+      (score, other) => score + answerCharacters(other.answer).filter((letter) => letters.has(letter)).length,
+      0,
+    );
+}
+
+function orderWordsForPlacement(words: InputWord[], random: () => number): InputWord[] {
+  return shuffle(words, random).sort((first, second) => {
+    const connectionDifference = wordConnectionScore(second, words) - wordConnectionScore(first, words);
+    if (connectionDifference !== 0) return connectionDifference;
+    return answerCharacters(second.answer).length - answerCharacters(first.answer).length;
+  });
+}
+
+function normalizeLayout(words: UnnumberedWord[]): UnnumberedWord[] {
+  const size = getBounds(words);
+  return words.map((word) => ({
+    ...word,
+    row: word.row - size.minRow,
+    col: word.col - size.minCol,
+  }));
+}
+
 export function validateGridBeforeRender(
   words: UnnumberedWord[],
   random: () => number = Math.random,
@@ -175,21 +258,37 @@ export function validateGridBeforeRender(
       isSafeLayout(candidate, validated),
     );
     if (crossingOptions.length) {
-      crossingOptions.sort(
-        (first, second) => placementScore(first, validated) - placementScore(second, validated),
-      );
-      validated.push(crossingOptions[Math.floor(random() * Math.min(4, crossingOptions.length))]);
+      validated.push(selectBestCandidate(crossingOptions, validated, random));
     } else {
-      validated.push(isolatedCandidate(word, validated, random));
+      const isolatedOptions = compactIsolatedCandidates(word, validated);
+      validated.push(selectBestCandidate(isolatedOptions, validated, random));
     }
   }
 
-  const size = getBounds(validated);
-  return validated.map((word) => ({
-    ...word,
-    row: word.row - size.minRow,
-    col: word.col - size.minCol,
-  }));
+  return normalizeLayout(validated);
+}
+
+function buildLayoutAttempt(words: InputWord[], random: () => number): UnnumberedWord[] {
+  const orderedWords = orderWordsForPlacement(words, random);
+  const [firstWord, ...remainingWords] = orderedWords;
+  const placed: UnnumberedWord[] = [
+    { ...firstWord, row: 0, col: 0, direction: random() < 0.5 ? 'H' : 'V' },
+  ];
+
+  for (const word of remainingWords) {
+    const crossingOptions = crossingCandidates(word, placed).filter((candidate) =>
+      isSafeLayout(candidate, placed),
+    );
+    if (crossingOptions.length) {
+      placed.push(selectBestCandidate(crossingOptions, placed, random));
+      continue;
+    }
+
+    const isolatedOptions = compactIsolatedCandidates(word, placed);
+    placed.push(selectBestCandidate(isolatedOptions, placed, random));
+  }
+
+  return validateGridBeforeRender(placed, random);
 }
 
 export function generateCrossword(
@@ -197,24 +296,17 @@ export function generateCrossword(
   random: () => number = Math.random,
 ): PlacedWord[] {
   if (!input.length) return [];
-  const words = shuffle(input, random);
-  const placed: UnnumberedWord[] = [
-    { ...words[0], row: 0, col: 0, direction: random() < 0.5 ? 'H' : 'V' },
-  ];
+  const attempts = Math.min(48, Math.max(16, input.length * 4));
+  let bestLayout = buildLayoutAttempt(input, random);
 
-  for (const word of words.slice(1)) {
-    const candidates = crossingCandidates(word, placed);
-    if (candidates.length) {
-      candidates.sort(
-        (first, second) => placementScore(first, placed) - placementScore(second, placed),
-      );
-      placed.push(candidates[Math.floor(random() * Math.min(4, candidates.length))]);
-    } else {
-      placed.push(isolatedCandidate(word, placed, random));
+  for (let attempt = 1; attempt < attempts; attempt += 1) {
+    const candidateLayout = buildLayoutAttempt(input, random);
+    if (layoutScore(candidateLayout) < layoutScore(bestLayout)) {
+      bestLayout = candidateLayout;
     }
   }
 
-  const validWords = validateGridBeforeRender(placed, random);
+  const validWords = bestLayout;
   const starts = [...validWords].sort(
     (first, second) => first.row - second.row || first.col - second.col,
   );

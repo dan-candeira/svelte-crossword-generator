@@ -36,6 +36,22 @@ describe('gerador de cruzadinha', () => {
     expect(wordsTouchOrCollide(placed[0], placed[1])).toBe(false);
   });
 
+  it('compacta palavras isoladas sem remover a célula preta de separação', () => {
+    const placed = generateCrossword([
+      { clue: 'Um', answer: 'あい' },
+      { clue: 'Dois', answer: 'うえ' },
+      { clue: 'Três', answer: 'おか' },
+      { clue: 'Quatro', answer: 'きく' }
+    ], predictableRandom);
+    const grid = createGrid(placed);
+
+    expect(grid.length * grid[0].length).toBeLessThanOrEqual(64);
+    expect(placed.every((word, index) => placed.slice(index + 1).every(
+      (other) => !wordsTouchOrCollide(word, other)
+    ))).toBe(true);
+    expect(grid.flat().some((cell) => cell.wordIds.length === 0)).toBe(true);
+  });
+
   it('mantém cruzamentos reais e cria células vazias para a separação visual', () => {
     const placed = generateCrossword([
       { clue: 'Felino', answer: 'ねこ' },
