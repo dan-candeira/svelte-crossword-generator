@@ -3,7 +3,11 @@ export type Direction = 'H' | 'V';
 export interface InputWord {
   clue: string;
   answer: string;
+  createdAt?: Date;
+  wordId: Date;
 }
+
+export type InputWords = InputWord[];
 
 export interface PlacedWord extends InputWord {
   id: number;
