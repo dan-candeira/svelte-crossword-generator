@@ -138,6 +138,7 @@ button.secondary:focus-visible {
   height: var(--cell-size);
   overflow: hidden;
   background: white;
+  border: 1px solid #94a3b8;
 }
 .cell.black {
   background: #111827;
@@ -239,6 +240,7 @@ button.secondary:focus-visible {
   }
   .crossword {
     overflow: visible;
+    background: #94a3b8;
   }
   .cell.black {
     background: #111827 !important;

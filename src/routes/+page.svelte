@@ -191,7 +191,7 @@
     <div>
       <p class="eyebrow" lang="ja">ニャーニャー</p>
       <h1>Palavras cruzadas</h1>
-      <ul class="instructions">
+      <ul class="instructions no-print">
         <li>Clique em uma letra para selecionar uma palavra.</li>
         <li>Dê duplo clique em um cruzamento para alternar entre horizontal e vertical.</li>
       </ul>
@@ -213,7 +213,7 @@
   </p>
 
   {#if status}
-    <p class="status" aria-live="polite">
+    <p class="status no-print" aria-live="polite">
       {status}
     </p>
   {/if}
