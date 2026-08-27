@@ -1,16 +1,14 @@
 <script lang="ts">
-  import { createEventDispatcher } from 'svelte';
-  import type { Cell } from '../types';
+  import type { Cell, CellChangeEvent } from '$lib/utils/types';
 
-  const dispatch = createEventDispatcher<{
-    cellChange: { row: number; col: number; value: string };
-  }>();
+  let { grid, answers, showAnswers, oncellChange }: {
+    grid: Cell[][];
+    answers: { [key: string]: string };
+    showAnswers: boolean;
+    oncellChange: (event: CellChangeEvent) => void;
+  } = $props();
 
-  export let grid: Cell[][] = [];
-  export let answers: { [key: string]: string } = {};
-  export let showAnswers: boolean = false;
-
-  let selectedCell: { row: number; col: number } | null = null;
+  let selectedCell: { row: number; col: number } | null = $state(null);
 
   function handleCellClick(row: number, col: number) {
     if (grid[row] && !grid[row][col].blocked) {
@@ -24,7 +22,7 @@
     col: number
   ) {
     const value = event.currentTarget.value.toUpperCase().slice(-1);
-    dispatch('cellChange', { row, col, value });
+    oncellChange({ row, col, value });
     answers[`${row}-${col}`] = value;
 
     // Move to next cell on input
@@ -75,8 +73,8 @@
 
 <div class="grid-wrapper">
   <div class="grid" style="--size: {grid.length}">
-    {#each grid as row, r}
-      {#each row as cell, c}
+    {#each grid as row, r (r)}
+      {#each row as cell, c (c)}
         <div class="cell-wrapper" class:blocked={cell.blocked}>
           {#if !cell.blocked}
             {#if cell.number}
@@ -86,9 +84,9 @@
               type="text"
               maxlength="1"
               value={showAnswers ? cell.letter || '' : answers[`${r}-${c}`] || ''}
-              on:input={(e) => handleInput(e, r, c)}
-              on:keydown={(e) => handleKeyDown(e, r, c)}
-              on:click={() => handleCellClick(r, c)}
+              oninput={(e) => handleInput(e, r, c)}
+              onkeydown={(e) => handleKeyDown(e, r, c)}
+              onclick={() => handleCellClick(r, c)}
               class:selected={selectedCell?.row === r && selectedCell?.col === c}
               class:filled={answers[`${r}-${c}`]}
               class:answer={showAnswers && cell.letter}

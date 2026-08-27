@@ -1,31 +1,31 @@
 <script lang="ts">
-  import { onMount } from 'svelte';
-  import type { Word, Crossword, Cell } from './types';
-  import CrosswordGrid from './components/CrosswordGrid.svelte';
-  import CluesList from './components/CluesList.svelte';
-  import FileUploader from './components/FileUploader.svelte';
-  import { generateCrossword } from './utils/crosswordGenerator';
+  import CluesList from '$lib/components/CluesList.svelte';
+  import CrosswordGrid from '$lib/components/CrosswordGrid.svelte';
+  import FileUploader from '$lib/components/FileUploader.svelte';
+  import type { Crossword, Word } from '$lib/utils/types';
+  import { generateCrossword } from '$lib/utils/crosswordGenerator';
 
-  let words: Word[] = [];
-  let crossword: Crossword | null = null;
-  let selectedCell: { row: number; col: number } | null = null;
-  let answers: { [key: string]: string } = {};
-  let showAnswers = false;
+  let words: Word[] = $state([]);
+  let crossword: Crossword | null = $state(null);
+  let answers: { [key: string]: string } = $state({});
+  let showAnswers = $state(false);
 
-  function handleWordsLoaded(event: CustomEvent<Word[]>) {
-    words = event.detail;
+  function handleWordsLoaded(event: Word[]) {
+    words = $state.snapshot(event);
     generateNewCrossword();
   }
 
   function generateNewCrossword() {
     if (words.length > 0) {
-      crossword = generateCrossword(words);
+      crossword = generateCrossword(
+        $state.snapshot(words)
+      );
       answers = {};
     }
   }
 
-  function handleCellChange(event: CustomEvent<{ row: number; col: number; value: string }>) {
-    const { row, col, value } = event.detail;
+  function handleCellChange(event: { row: number; col: number; value: string }) {
+    const { row, col, value } = event;
     if (crossword) {
       const key = `${row}-${col}`;
       answers[key] = value.toUpperCase();
@@ -49,17 +49,17 @@
 
   <main>
     <div class="sidebar">
-      <FileUploader on:wordsLoaded={handleWordsLoaded} />
+      <FileUploader onwordsLoaded={handleWordsLoaded} />
       
       {#if words.length > 0}
         <div class="controls">
-          <button on:click={generateNewCrossword} class="btn btn-primary">
+          <button onclick={generateNewCrossword} class="btn btn-primary">
             🔄 Generate New
           </button>
-          <button on:click={resetCrossword} class="btn btn-secondary">
+          <button onclick={resetCrossword} class="btn btn-secondary">
             ↺ Reset
           </button>
-          <button on:click={toggleAnswers} class="btn btn-secondary">
+          <button onclick={toggleAnswers} class="btn btn-secondary">
             {showAnswers ? '👁 Hide Answers' : '👁 Show Answers'}
           </button>
         </div>
@@ -74,7 +74,7 @@
       {#if crossword}
         <CrosswordGrid
           grid={crossword.grid}
-          on:cellChange={handleCellChange}
+          oncellChange={handleCellChange}
           {answers}
           {showAnswers}
         />

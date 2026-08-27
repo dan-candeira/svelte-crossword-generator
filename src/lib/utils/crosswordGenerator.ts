@@ -1,4 +1,4 @@
-import type { Word, Crossword, Cell, Clue } from '../types';
+import type { Word, Crossword, Cell, Clue } from './types';
 
 const GRID_SIZE = 15;
 const MIN_WORD_LENGTH = 2;
@@ -166,8 +166,7 @@ function canPlaceWord(
   word: string,
   row: number,
   col: number,
-  direction: 'across' | 'down',
-  placedWords: PlacedWord[]
+  direction: 'across' | 'down'
 ): boolean {
   // Check bounds
   if (direction === 'across') {

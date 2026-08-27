@@ -1,10 +1,12 @@
 <script lang="ts">
-  import { createEventDispatcher } from 'svelte';
-  import type { Word } from '../types';
+  import type { Word } from '$lib/utils/types';
 
-  const dispatch = createEventDispatcher<{ wordsLoaded: Word[] }>();
 
-  let fileName = '';
+  let { onwordsLoaded }: {
+    onwordsLoaded: (event: Word[]) => void;
+  } = $props();
+
+  let fileName = $state('');
 
   function handleFileUpload(event: Event) {
     const input = event.target as HTMLInputElement;
@@ -35,7 +37,7 @@
           throw new Error('Invalid word format');
         });
 
-        dispatch('wordsLoaded', words);
+        onwordsLoaded(words);
       } catch (error) {
         alert('Error parsing JSON: ' + (error as Error).message);
         fileName = '';
@@ -49,7 +51,7 @@
 <div class="uploader">
   <h3>📁 Load Crossword Words</h3>
   <label class="file-input-wrapper">
-    <input type="file" accept=".json" on:change={handleFileUpload} />
+    <input type="file" accept=".json" onchange={handleFileUpload} />
     <span class="file-input-label">Choose JSON File</span>
   </label>
   {#if fileName}
@@ -58,14 +60,14 @@
   <div class="format-info">
     <p><strong>JSON Format:</strong></p>
     <pre><code>{`[
-  {{
+  {
     "text": "WORD",
     "tip": "Clue for the word"
-  }},
-  {{
+  },
+  {
     "text": "ANOTHER",
     "tip": "Another clue"
-  }}
+  }
 ]`}</code></pre>
   </div>
 </div>
