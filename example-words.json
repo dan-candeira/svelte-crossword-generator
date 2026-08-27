@@ -1,0 +1,50 @@
+[
+  {
+    "text": "PYTHON",
+    "tip": "Popular programming language known for simplicity"
+  },
+  {
+    "text": "JAVASCRIPT",
+    "tip": "Language that powers web browsers"
+  },
+  {
+    "text": "SVELTE",
+    "tip": "Compiler framework used to build this app"
+  },
+  {
+    "text": "REACT",
+    "tip": "Facebook's JavaScript library for UI"
+  },
+  {
+    "text": "VUE",
+    "tip": "Progressive JavaScript framework"
+  },
+  {
+    "text": "ANGULAR",
+    "tip": "Google's TypeScript-based framework"
+  },
+  {
+    "text": "NODE",
+    "tip": "JavaScript runtime environment"
+  },
+  {
+    "text": "HTML",
+    "tip": "Markup language for web pages"
+  },
+  {
+    "text": "CSS",
+    "tip": "Styling language for web design"
+  },
+  {
+    "text": "DATABASE",
+    "tip": "Organized collection of data"
+  },
+  {
+    "text": "ALGORITHM",
+    "tip": "Step-by-step procedure for solving a problem"
+  },
+  {
+    "text": "DEBUG",
+    "tip": "Find and fix errors in code"
+  }
+]
