@@ -136,6 +136,7 @@ button.secondary:focus-visible {
   transform-origin: top left;
   /* max-width: 95vw; */
   background: #94a3b8;
+  height: fit-content;
 }
 
 .cell {
