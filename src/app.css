@@ -1,0 +1,255 @@
+:root {
+  --cell-size: clamp(2.5rem, 7vw, 3.25rem);
+  --ink: #172033;
+  --page: #f1f5f9;
+  --active: #fef3c7;
+  --current: #fbbf24;
+}
+*,
+*::after,
+*::before {
+  box-sizing: border-box;
+}
+
+html, 
+body {
+  width: 100%;
+}
+
+body {
+  margin: 0;
+  min-width: 320px;
+  color: var(--ink);
+  background: var(--page);
+  font-family: Arial, sans-serif;
+}
+button,
+input {
+  font: inherit;
+}
+.app-shell {
+  width: min(1120px, calc(100% - 2rem));
+  margin: 0 auto;
+  padding: 2rem 0 3rem;
+}
+
+h1,
+h2,
+p {
+  margin-top: 0;
+}
+h1 {
+  margin-bottom: 0.5rem;
+}
+.eyebrow {
+  margin-bottom: 0.35rem;
+  color: #475569;
+  font-size: 0.8rem;
+  font-weight: bold;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+.instructions,
+.status,
+.format-help {
+  color: #475569;
+}
+.status {
+  margin: 16px 0;
+}
+.format-help {
+  font-size: 0.9rem;
+  margin-bottom: 32px;
+}
+code {
+  padding: 0.15rem 0.3rem;
+  border-radius: 0.2rem;
+  background: #e2e8f0;
+}
+
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: end;
+  gap: 24px;
+  margin: 32px 0;
+  width: 100%;
+}
+
+
+button,
+.file-picker {
+  border: 0;
+  padding: 1rem;
+  color: white;
+  background: #03339a;
+  cursor: pointer;
+  font-weight: bold;
+  flex-grow: 1;
+  flex-basis: 200px;
+  text-align: center;
+}
+
+.file-picker {
+  background: #25a6eb;
+}
+
+button:hover,
+button:focus-visible,
+.file-picker:hover {
+  background: #1d4ed8;
+}
+
+button.secondary {
+  color: #1e3a8a;
+  background: #dbeafe;
+}
+button.secondary:hover,
+button.secondary:focus-visible {
+  background: #bfdbfe;
+}
+.file-picker input {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+}
+
+.game-layout {
+  display: flex;
+  gap: 2rem;
+  flex-wrap: wrap;
+}
+
+.crossword {
+  display: grid;
+  gap: 2px;
+  width: max-content;
+  padding: 2px;
+  transform-origin: top left;
+  /* max-width: 95vw; */
+  background: #94a3b8;
+}
+
+.cell {
+  position: relative;
+  width: var(--cell-size);
+  height: var(--cell-size);
+  overflow: hidden;
+  background: white;
+}
+.cell.black {
+  background: #111827;
+}
+.cell.active-word {
+  background: var(--active);
+}
+.cell.current-cell {
+  background: var(--current);
+}
+.cell input {
+  width: 100%;
+  height: 100%;
+  border: 0;
+  padding: 0.05em 0 0;
+  color: var(--ink);
+  background: transparent;
+  caret-color: #2563eb;
+  font-family: 'Hiragino Sans', 'Yu Gothic', Meiryo, system-ui, sans-serif;
+  font-size: clamp(1.35rem, 4vw, 1.9rem);
+  font-weight: bold;
+  line-height: 1.15;
+  text-align: center;
+  text-transform: none;
+}
+.cell input:focus {
+  outline: 3px solid #2563eb;
+  outline-offset: -3px;
+}
+.number {
+  position: absolute;
+  z-index: 1;
+  top: 2px;
+  left: 4px;
+  color: #334155;
+  font-size: 0.62rem;
+  font-weight: bold;
+  pointer-events: none;
+}
+.clues {
+  display: grid;
+  gap: 1.5rem;
+  padding: 1.25rem;
+  background: white;
+  flex-grow: 1;
+  flex-basis: 350px;
+  max-width: 600px;
+}
+
+.clues h2 {
+  margin-bottom: 0.6rem;
+  font-size: 1rem;
+}
+.clues ol {
+  margin: 0;
+  padding-left: 1.5rem;
+}
+.clues li {
+  margin: 0.45rem 0;
+  padding-left: 0.15rem;
+}
+.clues li button {
+  padding: 0;
+  color: inherit;
+  background: transparent;
+  text-align: left;
+}
+.clues li button:hover {
+  color: inherit;
+  background: transparent;
+  text-decoration: underline;
+}
+.clues li.active-clue {
+  color: #d85606;
+  font-weight: bold;
+}
+.clues li.completed-clue button {
+  opacity: 0.6;
+  text-decoration: line-through;
+}
+
+@media print {
+  @page {
+    margin: 1cm;
+  }
+  body {
+    background: white;
+  }
+  .app-shell {
+    width: 100%;
+    padding: 0;
+  }
+  .no-print {
+    display: none !important;
+  }
+  .game-layout {
+    grid-template-columns: auto 1fr;
+    gap: 1rem;
+  }
+  .crossword {
+    overflow: visible;
+  }
+  .cell.black {
+    background: #111827 !important;
+    print-color-adjust: exact;
+    -webkit-print-color-adjust: exact;
+  }
+  .cell input {
+    color: #000;
+  }
+  .clues {
+    box-shadow: none;
+    border: 1px solid #cbd5e1;
+  }
+}
