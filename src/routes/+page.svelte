@@ -12,27 +12,41 @@
   import { normalizeKanaInput, parseWordsJsonFile } from '$lib/jsonImport';
   import type { Direction, InputWord, PlacedWord } from '$lib/types';
   import { onMount } from 'svelte';
+  import { keyHandler } from '$lib/utils/keyboard-handler';
+
+  type PaperSize = 'A4' | 'A3' | 'Letter';
+
+  const ghostCells = Array.from({ length: 64 });
+  const paperDimensions: Record<PaperSize, { width: number; height: number }> = {
+    A4: { width: 210, height: 297 },
+    A3: { width: 297, height: 420 },
+    Letter: { width: 215.9, height: 279.4 },
+  };
+  const printPageSize: Record<PaperSize, string> = { A4: 'A4', A3: 'A3', Letter: 'letter' };
 
   onMount(() => {
-    // Safe to use window here
-    // Run on initial load and whenever the window resizes
-    window.addEventListener('DOMContentLoaded', () => scaleDivToFit());
-    window.addEventListener('load', () => scaleDivToFit());
-    window.addEventListener('resize', () => scaleDivToFit());
+    const onResize = () => scaleDivToFit();
+    window.addEventListener('resize', onResize);
+    void startGame();
 
-    scaleDivToFit();
+    return () => window.removeEventListener('resize', onResize);
   });
 
   let sourceWords = $state<InputWord[]>(DEFAULT_WORDS);
-  let placedWords = $state<PlacedWord[]>(generateCrossword(DEFAULT_WORDS));
+  let placedWords = $state<PlacedWord[]>([]);
   let letters = $state<Record<string, string>>({});
-  let activeWordId = $derived<number | null>(placedWords[0]?.id ?? null);
-  let direction = $derived<Direction>(placedWords[0]?.direction ?? 'H');
-  let currentRow = $derived<number | null>(placedWords[0]?.row ?? null);
-  let currentCol = $derived<number | null>(placedWords[0]?.col ?? null);
+  let activeWordId = $state<number | null>(null);
+  let direction = $state<Direction>('H');
+  let currentRow = $state<number | null>(null);
+  let currentCol = $state<number | null>(null);
   let isComposing = $state(false);
+  let isGenerating = $state(true);
+  let paperSize = $state<PaperSize>('A4');
+  let printGridScale = $state(1);
+  let printGridWidth = $state(0);
+  let printGridHeight = $state(0);
   let status = $state('');
-  let element: HTMLElement;
+  let element: HTMLElement | null = $state(null);
   let parent: HTMLElement;
 
   let grid = $derived(createGrid(placedWords));
@@ -98,48 +112,44 @@
     onLetterInput(event, row, col);
   }
 
-  function onKeydown(event: KeyboardEvent): void {
-    const input = event.currentTarget as HTMLInputElement;
-    if (event.key === 'Backspace' && !input.value) {
-      event.preventDefault();
-      moveInActiveWord(-1);
-    } else if (event.key === 'Enter' && input.value) {
-      event.preventDefault();
-      moveInActiveWord(1);
-    } else if (event.key === 'ArrowRight' || event.key === 'ArrowDown') {
-      event.preventDefault();
-      moveInActiveWord(1);
-    } else if (event.key === 'ArrowLeft' || event.key === 'ArrowUp') {
-      event.preventDefault();
-      moveInActiveWord(-1);
+  async function startGame(words: InputWord[] = sourceWords): Promise<void> {
+    isGenerating = true;
+    status = '';
+    await tick();
+    await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
+
+    try {
+      placedWords = generateCrossword(words);
+      letters = {};
+      activeWordId = placedWords[0]?.id ?? null;
+      direction = placedWords[0]?.direction ?? 'H';
+      currentRow = placedWords[0]?.row ?? null;
+      currentCol = placedWords[0]?.col ?? null;
+      status = 'Nova cruzadinha criada. Preencha as letras usando as pistas.';
+    } catch {
+      placedWords = [];
+      status = 'Não foi possível gerar uma grade com as palavras informadas.';
+    } finally {
+      isGenerating = false;
+      await tick();
+      scaleDivToFit();
     }
   }
 
-  function startGame(words: InputWord[] = sourceWords): void {
-    placedWords = generateCrossword(words);
-    letters = {};
-    activeWordId = placedWords[0]?.id ?? null;
-    direction = placedWords[0]?.direction ?? 'H';
-    currentRow = placedWords[0]?.row ?? null;
-    currentCol = placedWords[0]?.col ?? null;
-    status = 'Nova cruzadinha criada. Preencha as letras usando as pistas.';
-    setTimeout(() => {
-      scaleDivToFit();
-    }, 200);
-  }
-
   async function importJson(event: Event): Promise<void> {
+    isGenerating = true;
     const input = event.currentTarget as HTMLInputElement;
     const file = input.files?.[0];
     if (!file) return;
     try {
       sourceWords = await parseWordsJsonFile(file);
-      startGame(sourceWords);
+      await startGame(sourceWords);
       status = `${sourceWords.length} palavras foram importadas e uma nova grade foi criada.`;
     } catch (error) {
       status = error instanceof Error ? error.message : 'Não foi possível importar o arquivo.';
     } finally {
       input.value = '';
+      isGenerating = false;
     }
   }
 
@@ -151,20 +161,44 @@
     void focusCell(word.row, word.col);
   }
 
-  function printCrossword(): void {
+  function setPrintPageRule(): void {
+    const styleId = 'crossword-print-page-size';
+    const style =
+      document.querySelector<HTMLStyleElement>(`#${styleId}`) ?? document.createElement('style');
+    style.id = styleId;
+    style.textContent = `@media print { @page { size: ${printPageSize[paperSize]} portrait; margin: 10mm; } }`;
+    if (!style.parentElement) document.head.append(style);
+  }
+
+  function preparePrintGrid(): void {
+    if (!element) return;
+    const rect = measureNaturalRect();
+    const paper = paperDimensions[paperSize];
+    const pixelsPerMillimeter = 96 / 25.4;
+    const printableWidth = (paper.width - 20) * pixelsPerMillimeter;
+    // Reserva espaço para o título e permite que as pistas fluam para páginas seguintes.
+    const printableHeight = (paper.height - 55) * pixelsPerMillimeter;
+
+    printGridScale = Math.min(1, printableWidth / rect.width, printableHeight / rect.height);
+    printGridWidth = Math.ceil(rect.width * printGridScale);
+    printGridHeight = Math.ceil(rect.height * printGridScale);
+  }
+
+  async function printCrossword(): Promise<void> {
+    preparePrintGrid();
+    setPrintPageRule();
+    await tick();
     window.print();
   }
 
-  function measureNaturalRect() {
-      // Temporarily clear transform so we measure the element's natural size
-      const prevTransform = element.style.transform;
-      element.style.transform = '';
-      // getBoundingClientRect returns current size in CSS pixels
-      const rect = element.getBoundingClientRect();
-      // restore previous transform (we'll set the final transform below)
-      element.style.transform = prevTransform;
-      return rect;
-    }
+  function measureNaturalRect(): DOMRect {
+
+    const previousTransform = (element as HTMLElement).style.transform;
+    (element as HTMLElement).style.transform = '';
+    const rect = (element as HTMLElement).getBoundingClientRect();
+    (element as HTMLElement).style.transform = previousTransform;
+    return rect;
+  }
 
   function scaleDivToFit() {
     if (!element?.offsetWidth) {
@@ -172,13 +206,12 @@
     }
     const rect = measureNaturalRect();
     const vw = parent.clientWidth;
-    const vh = parent.clientWidth;
+    const vh = parent.clientHeight || parent.clientWidth;
     // Compute scale so the element fits within viewport; don't upscale above 1
     const scaleX = vw / rect.width;
     const scaleY = vh / rect.height;
     const scale = Math.min(1, scaleX, scaleY);
 
-    // Apply transform and update wrapper size so browser layout uses the scaled size
     element.style.transformOrigin = 'top left';
     element.style.transform = `scale(${scale})`;
   }
@@ -202,14 +235,31 @@
         Importar arquivo
         <input type="file" accept="application/json,.json" onchange={importJson} />
       </label>
-      <button type="button" onclick={() => startGame()}>Alterar layout do grid</button>
-      <button type="button" class="secondary" onclick={printCrossword}>Imprimir</button>
+      <button type="button" disabled={isGenerating} onclick={async() => await startGame()}
+        >Alterar layout do grid</button
+      >
+    </div>
+    <div class="actions no-print">
+      <label class="paper-size">
+        Folha para impressão
+        <select bind:value={paperSize} aria-label="Tamanho da folha para impressão">
+          <option value="A4">A4</option>
+          <option value="A3">A3</option>
+          <option value="Letter">Carta</option>
+        </select>
+      </label>
+      <button
+        type="button"
+        class="secondary"
+        disabled={isGenerating}
+        onclick={() => void printCrossword()}>Imprimir</button
+      >
     </div>
   </header>
 
   <p class="format-help no-print">
     Formato de entrada do documento: <code
-      >[&#123; "clue": "Pista", "answer": "ひらがな" &#125;]</code
+      >[&#123; "clue": "Pista", "answer": "ひらがな ou カタカナ" &#125;]</code
     >
   </p>
 
@@ -219,56 +269,64 @@
     </p>
   {/if}
 
-  <section 
-    class="game-layout" 
-    aria-label="Cruzadinha e pistas"
-    bind:this={parent}
-  >
+  <section class="game-layout" aria-label="Cruzadinha e pistas" bind:this={parent}>
     <div
-      class="crossword"
-      bind:this={element}
-      style:grid-template-columns={`repeat(${grid[0]?.length ?? 0}, var(--cell-size))`}
-      aria-label="Grade da cruzadinha"
+      class="print-grid-frame"
+      style={`--print-grid-width: ${printGridWidth}px; --print-grid-height: ${printGridHeight}px; --print-grid-scale: ${printGridScale};`}
     >
-      {#each grid as line, row}
-        {#each line as data, col}
-          {@const key = cellKey(row, col)}
-          {#if data.wordIds.length === 0}
-            <div class="cell black" aria-hidden="true"></div>
-          {:else}
-            <div
-              class:active-word={activeWord ? data.wordIds.includes(activeWord.id) : false}
-              class:current-cell={currentRow === row && currentCol === col}
-              class="cell"
-              data-row={row}
-              data-col={col}
-            >
-              {#if data.starts.length > 0}
-                <span class="number">{data.starts.join(',')}</span>
+      {#if isGenerating}
+        <div class="ghost-crossword" role="status" aria-label="Calculando nova cruzadinha">
+          {#each ghostCells as _}
+            <span></span>
+          {/each}
+        </div>
+      {:else}
+        <div
+          class="crossword"
+          bind:this={element}
+          style:grid-template-columns={`repeat(${grid[0]?.length ?? 0}, var(--cell-size))`}
+          aria-label="Grade da cruzadinha"
+        >
+          {#each grid as line, row}
+            {#each line as data, col}
+              {@const key = cellKey(row, col)}
+              {#if data.wordIds.length === 0}
+                <div class="cell black" aria-hidden="true"></div>
+              {:else}
+                <div
+                  class:active-word={activeWord ? data.wordIds.includes(activeWord.id) : false}
+                  class:current-cell={currentRow === row && currentCol === col}
+                  class="cell"
+                  data-row={row}
+                  data-col={col}
+                >
+                  {#if data.starts.length > 0}
+                    <span class="number">{data.starts.join(',')}</span>
+                  {/if}
+                  <input
+                    type="text"
+                    autocomplete="off"
+                    inputmode="text"
+                    lang="ja"
+                    value={letters[key] ?? ''}
+                    data-row={row}
+                    data-col={col}
+                    aria-label={`Letra na linha ${row + 1}, coluna ${col + 1}`}
+                    onfocus={() => selectWord(row, col)}
+                    ondblclick={() => toggleDirection(row, col)}
+                    oncompositionstart={() => {
+                      isComposing = true;
+                    }}
+                    oncompositionend={(event) => onCompositionEnd(event, row, col)}
+                    oninput={(event) => onLetterInput(event, row, col)}
+                    onkeydown={(event) => keyHandler(event, (index) => moveInActiveWord(index))}
+                  />
+                </div>
               {/if}
-              <input
-                type="text"
-                autocomplete="off"
-                inputmode="text"
-                lang="ja"
-                maxlength="1"
-                value={letters[key] ?? ''}
-                data-row={row}
-                data-col={col}
-                aria-label={`Letra na linha ${row + 1}, coluna ${col + 1}`}
-                onfocus={() => selectWord(row, col)}
-                ondblclick={() => toggleDirection(row, col)}
-                oncompositionstart={() => {
-                  isComposing = true;
-                }}
-                oncompositionend={(event) => onCompositionEnd(event, row, col)}
-                oninput={(event) => onLetterInput(event, row, col)}
-                onkeydown={onKeydown}
-              />
-            </div>
-          {/if}
-        {/each}
-      {/each}
+            {/each}
+          {/each}
+        </div>
+      {/if}
     </div>
 
     <aside class="clues" aria-label="Pistas">
