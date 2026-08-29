@@ -90,7 +90,9 @@ button,
   text-align: center;
 }
 
-button:not([data-icon]) {
+button:not([data-icon]),
+.file-picker,
+.paper-size {
   flex-grow: 1;
   flex-basis: 200px;
 }
