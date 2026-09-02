@@ -228,6 +228,14 @@
   }
 </script>
 
+<svelte:head>
+  <title>Palavras cruzadas | ニャーニャー</title>
+  <meta
+    name="description"
+    content="Tela para criar, gerar, reorganizar e imprimir palavras cruzadas."
+  />
+</svelte:head>
+
 <h1>Palavras cruzadas</h1>
 
 <p class="format-help no-print">
