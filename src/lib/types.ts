@@ -3,11 +3,7 @@ export type Direction = 'H' | 'V';
 export interface InputWord {
   clue: string;
   answer: string;
-  createdAt?: Date;
-  wordId: Date;
 }
-
-export type InputWords = InputWord[];
 
 export interface PlacedWord extends InputWord {
   id: number;
@@ -16,6 +12,8 @@ export interface PlacedWord extends InputWord {
   col: number;
   direction: Direction;
 }
+
+export type PositionedWord = InputWord & Pick<PlacedWord, 'row' | 'col' | 'direction'>;
 
 export interface WordCell {
   row: number;

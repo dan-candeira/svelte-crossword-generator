@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { tick } from 'svelte';
+  import { onMount, tick } from 'svelte';
   import {
     answerCharacters,
     cellKey,
@@ -9,20 +9,18 @@
     isWordCorrect,
     wordCells,
   } from '$lib/crossword';
-  import { normalizeKanaInput, parseWordsJsonFile } from '$lib/jsonImport';
+  import ClueList from '$lib/components/ClueList.svelte';
+  import ControlsBar from '$lib/components/ControlsBar.svelte';
+  import CrosswordGrid from '$lib/components/CrosswordGrid.svelte';
+  import WordFileBuilder from '$lib/components/WordFileBuilder.svelte';
+  import { normalizeKanaInput } from '$lib/input/kana';
+  import { parseWordsJsonFile } from '$lib/jsonImport';
+  import {
+    calculatePrintGridLayout,
+    setPrintPageRule,
+    type PaperSize,
+  } from '$lib/print/printLayout';
   import type { Direction, InputWord, PlacedWord } from '$lib/types';
-  import { onMount } from 'svelte';
-  import { keyHandler } from '$lib/utils/keyboard-handler';
-
-  type PaperSize = 'A4' | 'A3' | 'Letter';
-
-  const ghostCells = Array.from({ length: 64 });
-  const paperDimensions: Record<PaperSize, { width: number; height: number }> = {
-    A4: { width: 210, height: 297 },
-    A3: { width: 297, height: 420 },
-    Letter: { width: 215.9, height: 279.4 },
-  };
-  const printPageSize: Record<PaperSize, string> = { A4: 'A4', A3: 'A3', Letter: 'letter' };
 
   onMount(() => {
     const onResize = () => scaleDivToFit();
@@ -46,14 +44,17 @@
   let printGridWidth = $state(0);
   let printGridHeight = $state(0);
   let status = $state('');
-  let element: HTMLElement | null = $state(null);
-  let parent: HTMLElement;
+  let element: HTMLElement | undefined = $state();
+  let parent: HTMLElement | undefined;
 
   let grid = $derived(createGrid(placedWords));
   let activeWord = $derived(placedWords.find((word) => word.id === activeWordId) ?? null);
   let completedIds = $derived.by(
     () =>
       new Set(placedWords.filter((word) => isWordCorrect(word, letters)).map((word) => word.id)),
+  );
+  let printStyle = $derived(
+    `--print-grid-width: ${printGridWidth}px; --print-grid-height: ${printGridHeight}px; --print-grid-scale: ${printGridScale};`,
   );
 
   function wordsAt(row: number, col: number): PlacedWord[] {
@@ -112,6 +113,27 @@
     onLetterInput(event, row, col);
   }
 
+  function onCompositionStart(): void {
+    isComposing = true;
+  }
+
+  function onKeydown(event: KeyboardEvent): void {
+    const input = event.currentTarget as HTMLInputElement;
+    if (event.key === 'Backspace' && !input.value) {
+      event.preventDefault();
+      moveInActiveWord(-1);
+    } else if (event.key === 'Enter' && input.value) {
+      event.preventDefault();
+      moveInActiveWord(1);
+    } else if (event.key === 'ArrowRight' || event.key === 'ArrowDown') {
+      event.preventDefault();
+      moveInActiveWord(1);
+    } else if (event.key === 'ArrowLeft' || event.key === 'ArrowUp') {
+      event.preventDefault();
+      moveInActiveWord(-1);
+    }
+  }
+
   async function startGame(words: InputWord[] = sourceWords): Promise<void> {
     isGenerating = true;
     status = '';
@@ -119,6 +141,7 @@
     await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
 
     try {
+      sourceWords = words;
       placedWords = generateCrossword(words);
       letters = {};
       activeWordId = placedWords[0]?.id ?? null;
@@ -137,7 +160,6 @@
   }
 
   async function importJson(event: Event): Promise<void> {
-    isGenerating = true;
     const input = event.currentTarget as HTMLInputElement;
     const file = input.files?.[0];
     if (!file) return;
@@ -149,7 +171,6 @@
       status = error instanceof Error ? error.message : 'Não foi possível importar o arquivo.';
     } finally {
       input.value = '';
-      isGenerating = false;
     }
   }
 
@@ -161,47 +182,37 @@
     void focusCell(word.row, word.col);
   }
 
-  function setPrintPageRule(): void {
-    const styleId = 'crossword-print-page-size';
-    const style =
-      document.querySelector<HTMLStyleElement>(`#${styleId}`) ?? document.createElement('style');
-    style.id = styleId;
-    style.textContent = `@media print { @page { size: ${printPageSize[paperSize]} portrait; margin: 10mm; } }`;
-    if (!style.parentElement) document.head.append(style);
+  function applyPrintPageRule(): void {
+    setPrintPageRule(paperSize);
   }
 
   function preparePrintGrid(): void {
     if (!element) return;
     const rect = measureNaturalRect();
-    const paper = paperDimensions[paperSize];
-    const pixelsPerMillimeter = 96 / 25.4;
-    const printableWidth = (paper.width - 20) * pixelsPerMillimeter;
-    // Reserva espaço para o título e permite que as pistas fluam para páginas seguintes.
-    const printableHeight = (paper.height - 55) * pixelsPerMillimeter;
-
-    printGridScale = Math.min(1, printableWidth / rect.width, printableHeight / rect.height);
-    printGridWidth = Math.ceil(rect.width * printGridScale);
-    printGridHeight = Math.ceil(rect.height * printGridScale);
+    const layout = calculatePrintGridLayout(rect.width, rect.height, paperSize);
+    printGridScale = layout.scale;
+    printGridWidth = layout.width;
+    printGridHeight = layout.height;
   }
 
   async function printCrossword(): Promise<void> {
     preparePrintGrid();
-    setPrintPageRule();
+    applyPrintPageRule();
     await tick();
     window.print();
   }
 
   function measureNaturalRect(): DOMRect {
-
-    const previousTransform = (element as HTMLElement).style.transform;
-    (element as HTMLElement).style.transform = '';
-    const rect = (element as HTMLElement).getBoundingClientRect();
-    (element as HTMLElement).style.transform = previousTransform;
+    const _el = element as HTMLElement;
+    const previousTransform = _el.style.transform;
+    _el.style.transform = '';
+    const rect = _el.getBoundingClientRect();
+    _el.style.transform = previousTransform;
     return rect;
   }
 
-  function scaleDivToFit() {
-    if (!element?.offsetWidth) {
+  function scaleDivToFit(): void {
+    if (!element?.offsetWidth || !parent) {
       return;
     }
     const rect = measureNaturalRect();
@@ -217,147 +228,61 @@
   }
 </script>
 
-<main class="app-shell">
-  <header class="app-header">
-    <div>
-      <p class="eyebrow" lang="ja">ニャーニャー</p>
-      <h1>Palavras cruzadas</h1>
-      <ul class="instructions no-print">
-        <li>Clique em uma letra para selecionar uma palavra.</li>
-        <li>Dê duplo clique em um cruzamento para alternar entre horizontal e vertical.</li>
-      </ul>
-    </div>
-    <p>
-      <a href="/generate-file" class="no-print link">Gerar arquivo - palavras cruzadas</a>
-    </p>
-    <div class="actions no-print">
-      <label class="file-picker">
-        Importar arquivo
-        <input type="file" accept="application/json,.json" onchange={importJson} />
-      </label>
-      <button type="button" disabled={isGenerating} onclick={async() => await startGame()}
-        >Alterar layout do grid</button
-      >
-    </div>
-    <div class="actions no-print">
-      <label class="paper-size">
-        Folha para impressão
-        <select bind:value={paperSize} aria-label="Tamanho da folha para impressão">
-          <option value="A4">A4</option>
-          <option value="A3">A3</option>
-          <option value="Letter">Carta</option>
-        </select>
-      </label>
-      <button
-        type="button"
-        class="secondary"
-        disabled={isGenerating}
-        onclick={() => void printCrossword()}>Imprimir</button
-      >
-    </div>
-  </header>
+<h1>Palavras cruzadas</h1>
 
-  <p class="format-help no-print">
-    Formato de entrada do documento: <code
-      >[&#123; "clue": "Pista", "answer": "ひらがな ou カタカナ" &#125;]</code
-    >
+<p class="format-help no-print">
+  Formato de entrada do documento:
+  <code> [&#123; "clue": "Pista", "answer": "ひらがな ou カタカナ" &#125;] </code>
+</p>
+
+<WordFileBuilder {isGenerating} onGenerateGrid={startGame} />
+
+<ControlsBar
+  {isGenerating}
+  {paperSize}
+  onImport={importJson}
+  onPaperSizeChange={(size) => (paperSize = size)}
+  onGenerate={() => void startGame()}
+  onPrint={() => void printCrossword()}
+/>
+
+<div>
+  <ul class="instructions no-print">
+    <li>Clique em uma letra para selecionar uma palavra.</li>
+    <li>Dê duplo clique em um cruzamento para alternar entre horizontal e vertical.</li>
+  </ul>
+</div>
+{#if status}
+  <p class="status no-print" aria-live="polite">
+    {status}
   </p>
-
-  {#if status}
-    <p class="status no-print" aria-live="polite">
-      {status}
-    </p>
-  {/if}
-
-  <section class="game-layout" aria-label="Cruzadinha e pistas" bind:this={parent}>
-    <div
-      class="print-grid-frame"
-      style={`--print-grid-width: ${printGridWidth}px; --print-grid-height: ${printGridHeight}px; --print-grid-scale: ${printGridScale};`}
-    >
-      {#if isGenerating}
-        <div class="ghost-crossword" role="status" aria-label="Calculando nova cruzadinha">
-          {#each ghostCells as _}
-            <span></span>
-          {/each}
-        </div>
-      {:else}
-        <div
-          class="crossword"
-          bind:this={element}
-          style:grid-template-columns={`repeat(${grid[0]?.length ?? 0}, var(--cell-size))`}
-          aria-label="Grade da cruzadinha"
-        >
-          {#each grid as line, row}
-            {#each line as data, col}
-              {@const key = cellKey(row, col)}
-              {#if data.wordIds.length === 0}
-                <div class="cell black" aria-hidden="true"></div>
-              {:else}
-                <div
-                  class:active-word={activeWord ? data.wordIds.includes(activeWord.id) : false}
-                  class:current-cell={currentRow === row && currentCol === col}
-                  class="cell"
-                  data-row={row}
-                  data-col={col}
-                >
-                  {#if data.starts.length > 0}
-                    <span class="number">{data.starts.join(',')}</span>
-                  {/if}
-                  <input
-                    type="text"
-                    autocomplete="off"
-                    inputmode="text"
-                    lang="ja"
-                    value={letters[key] ?? ''}
-                    data-row={row}
-                    data-col={col}
-                    aria-label={`Letra na linha ${row + 1}, coluna ${col + 1}`}
-                    onfocus={() => selectWord(row, col)}
-                    ondblclick={() => toggleDirection(row, col)}
-                    oncompositionstart={() => {
-                      isComposing = true;
-                    }}
-                    oncompositionend={(event) => onCompositionEnd(event, row, col)}
-                    oninput={(event) => onLetterInput(event, row, col)}
-                    onkeydown={(event) => keyHandler(event, (index) => moveInActiveWord(index))}
-                  />
-                </div>
-              {/if}
-            {/each}
-          {/each}
-        </div>
-      {/if}
-    </div>
-
-    <aside class="clues" aria-label="Pistas">
-      <section>
-        <h2>Horizontais</h2>
-        <ol>
-          {#each placedWords.filter((word) => word.direction === 'H') as word (word.id)}
-            <li
-              value={word.number}
-              class:active-clue={word.id === activeWordId}
-              class:completed-clue={completedIds.has(word.id)}
-            >
-              <button type="button" onclick={() => selectClue(word)}>{word.clue}</button>
-            </li>
-          {/each}
-        </ol>
-      </section>
-      <section>
-        <h2>Verticais</h2>
-        <ol>
-          {#each placedWords.filter((word) => word.direction === 'V') as word (word.id)}
-            <li
-              value={word.number}
-              class:active-clue={word.id === activeWordId}
-              class:completed-clue={completedIds.has(word.id)}
-            >
-              <button type="button" onclick={() => selectClue(word)}>{word.clue}</button>
-            </li>
-          {/each}
-        </ol>
-      </section>
-    </aside>
-  </section>
-</main>
+{/if}
+<section 
+  class="game-layout" 
+  aria-label="Cruzadinha e pistas" 
+  bind:this={parent}
+  data-no-change
+>
+  <CrosswordGrid
+    {grid}
+    {letters}
+    {activeWordId}
+    {currentRow}
+    {currentCol}
+    {isGenerating}
+    {printStyle}
+    onFocusCell={selectWord}
+    onToggleDirection={toggleDirection}
+    onInput={onLetterInput}
+    {onCompositionStart}
+    {onCompositionEnd}
+    {onKeydown}
+    bind:element
+  />
+  <ClueList 
+    words={placedWords} 
+    {activeWordId} 
+    {completedIds} 
+    onSelect={selectClue} 
+  />
+</section>

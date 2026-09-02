@@ -1,23 +1,7 @@
 import type { InputWord } from './types';
+import { isKanaAnswer, normalizeKanaAnswer } from './input/kana';
 
-const KANA_CHARACTER = /^[\u3041-\u3096\u309d\u309e\u30a1-\u30fa\u30fc\u30fd\u30fe]$/u;
-
-export function normalizeKanaAnswer(value: string): string {
-  return value.normalize('NFC').replace(/\s+/g, '');
-}
-
-export function isKanaAnswer(value: string): boolean {
-  const normalized = normalizeKanaAnswer(value);
-  return (
-    normalized.length > 0 &&
-    Array.from(normalized).every((character) => KANA_CHARACTER.test(character))
-  );
-}
-
-export function normalizeKanaInput(value: string): string {
-  const characters = Array.from(normalizeKanaAnswer(value));
-  return characters.filter((character) => KANA_CHARACTER.test(character)).at(-1) ?? '';
-}
+export { isKanaAnswer, normalizeKanaAnswer, normalizeKanaInput } from './input/kana';
 
 export function parseWordsJson(value: unknown): InputWord[] {
   if (!Array.isArray(value) || value.length === 0) {
